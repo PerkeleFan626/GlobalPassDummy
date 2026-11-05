@@ -3,207 +3,233 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Auction System Test Bench</title>
+  <title>Auction System Test Bench - User & Mock Auth</title>
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
 
-  <h1>Auction System Test Bench</h1>
-  <div id="conn-status" class="status-badge">Checking connection...</div>
+  <div class="container">
+    <header>
+      <h1>Auction System — Step 2 Test Bench</h1>
+      <p>Manage authenticated users, dummy test personas, and active actor contexts.</p>
+    </header>
 
-  <!-- Section 1: Active Auctions -->
-  <section class="test-panel">
-    <h2>1. Active Auctions</h2>
-    <div class="controls">
-      <button id="btn-fetch-active">Fetch Active Auctions</button>
-    </div>
-    <div id="auctions-container" class="grid">
-      <p class="placeholder-text">Click "Fetch Active Auctions" to load active cards.</p>
-    </div>
-  </section>
+    <!-- Section 0: Active Actor Context -->
+    <section class="card">
+      <h2>Active Actor Context <span class="badge">Session State</span></h2>
+      <div class="actions">
+        <select id="select-actor" style="flex: 1;">
+          <option value="">-- Select Active Persona / Actor --</option>
+        </select>
+        <button id="btn-refresh-actors" class="btn-secondary">Reload Profiles</button>
+      </div>
 
-  <!-- Section 2: Lookup by UUID & Bid History -->
-  <section class="test-panel">
-    <h2>2. Lookup Auction by ID & Bids</h2>
-    <div class="input-group">
-      <input 
-        type="text" 
-        id="input-auction-id" 
-        placeholder="Paste an Auction UUID here..." 
-      />
-      <button id="btn-fetch-single">Inspect Details</button>
-      <button id="btn-fetch-bids" class="btn-secondary">Load Bids</button>
-    </div>
-    <div id="single-auction-view"></div>
-    <div id="bids-container"></div>
-  </section>
+      <div id="actor-banner" class="active-actor-banner" style="display: none;">
+        <div class="title">Current Acting User</div>
+        <div class="info" id="actor-details">None</div>
+      </div>
+    </section>
 
-  <!-- Section 3: Archived Auctions -->
-  <section class="test-panel">
-    <h2>3. Archived Auctions (Historical Store)</h2>
-    <div class="controls">
-      <button id="btn-fetch-archive">Fetch Archived Auctions</button>
-    </div>
-    <div id="archive-container" class="grid">
-      <p class="placeholder-text">Click "Fetch Archived Auctions" to load archived records.</p>
-    </div>
-  </section>
+    <!-- Section 1: Create Dummy User (RPC) -->
+    <section class="card">
+      <h2>1. Create Dummy User <span class="badge">Testing Helper</span></h2>
+      <p style="font-size: 0.85rem; color: var(--text-muted);">
+        Calls <code>create_dummy_user</code> RPC to seed a full test profile without email verification.
+      </p>
 
-  <!-- Section 4: Console Output -->
-  <section class="test-panel">
-    <h2>Console Output (JSON / Errors)</h2>
-    <pre id="raw-log">// API responses and error traces will print here...</pre>
-  </section>
+      <form id="form-dummy-user" class="form-grid">
+        <div class="form-group">
+          <label for="dummy-name">Name</label>
+          <input type="text" id="dummy-name" placeholder="Alice Lindqvist" required />
+        </div>
+        <div class="form-group">
+          <label for="dummy-email">Email</label>
+          <input type="email" id="dummy-email" placeholder="alice@testbench.local" required />
+        </div>
+        <div class="form-group">
+          <label for="dummy-role">Role</label>
+          <select id="dummy-role" required>
+            <option value="bidder">bidder</option>
+            <option value="seller">seller</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="dummy-country">Country</label>
+          <input type="text" id="dummy-country" placeholder="Sweden" required />
+        </div>
+      </form>
+
+      <div class="actions">
+        <button id="btn-submit-dummy" type="button">+ Create Dummy User</button>
+      </div>
+
+      <div id="dummy-log" class="log-box">Awaiting input...</div>
+    </section>
+
+    <!-- Section 2: Real Supabase Sign-Up -->
+    <section class="card">
+      <h2>2. Real Auth Sign-Up <span class="badge">Production Trigger</span></h2>
+      <p style="font-size: 0.85rem; color: var(--text-muted);">
+        Calls standard <code>signUp()</code> to verify the PostgreSQL <code>handle_new_user</code> trigger.
+      </p>
+
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="real-name">Full Name</label>
+          <input type="text" id="real-name" placeholder="Ayush Sharma" />
+        </div>
+        <div class="form-group">
+          <label for="real-email">Email</label>
+          <input type="email" id="real-email" placeholder="ayush@example.com" />
+        </div>
+        <div class="form-group">
+          <label for="real-pass">Password</label>
+          <input type="password" id="real-pass" placeholder="Min 6 characters" />
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="btn-submit-real" class="btn-secondary" type="button">Register User</button>
+      </div>
+
+      <div id="real-log" class="log-box">Awaiting input...</div>
+    </section>
+  </div>
 
   <script type="module">
-    import { supabase } from './database.js';
-    import { getActiveAuctions, getAuctionById, getAuctionBids } from './read_auction.js';
-    import { getArchivedAuctions } from './archive.js';
+    import { signUp } from './auth.js';
+    import { 
+      createDummyUser, 
+      getTestProfiles, 
+      setActivePersona 
+    } from './mockUsers.js';
 
-    const statusBadge = document.getElementById('conn-status');
-    const rawLog = document.getElementById('raw-log');
-    const auctionsContainer = document.getElementById('auctions-container');
-    const singleAuctionView = document.getElementById('single-auction-view');
-    const bidsContainer = document.getElementById('bids-container');
-    const archiveContainer = document.getElementById('archive-container');
-    const inputAuctionId = document.getElementById('input-auction-id');
+    // UI Elements - Actor Selection
+    const selectActor = document.getElementById('select-actor');
+    const btnRefreshActors = document.getElementById('btn-refresh-actors');
+    const actorBanner = document.getElementById('actor-banner');
+    const actorDetails = document.getElementById('actor-details');
 
-    // 0. Verify Supabase connection
-    async function verifyPing() {
-      const { count, error } = await supabase
-        .from('auctions')
-        .select('*', { count: 'exact', head: true });
+    // UI Elements - Dummy User Form
+    const dummyName = document.getElementById('dummy-name');
+    const dummyEmail = document.getElementById('dummy-email');
+    const dummyRole = document.getElementById('dummy-role');
+    const dummyCountry = document.getElementById('dummy-country');
+    const btnSubmitDummy = document.getElementById('btn-submit-dummy');
+    const dummyLog = document.getElementById('dummy-log');
 
-      if (error) {
-        statusBadge.textContent = `Connection Error: ${error.message}`;
-        statusBadge.className = 'status-badge offline';
-      } else {
-        statusBadge.textContent = `Supabase Connected (Live rows: ${count ?? 0})`;
-        statusBadge.className = 'status-badge online';
+    // UI Elements - Real Auth Form
+    const realName = document.getElementById('real-name');
+    const realEmail = document.getElementById('real-email');
+    const realPass = document.getElementById('real-pass');
+    const btnSubmitReal = document.getElementById('btn-submit-real');
+    const realLog = document.getElementById('real-log');
+
+    let profilesCache = [];
+
+    // 1. Populate Actor Dropdown
+    async function refreshActors(selectedId = null) {
+      profilesCache = await getTestProfiles();
+      selectActor.innerHTML = '<option value="">-- Select Active Persona / Actor --</option>';
+
+      profilesCache.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = `${p.name} [${p.role}] (${p.represented_country || 'No country'}) - ${p.id.slice(0, 8)}...`;
+        selectActor.appendChild(opt);
+      });
+
+      if (selectedId) {
+        selectActor.value = selectedId;
+        selectActor.dispatchEvent(new Event('change'));
       }
     }
-    verifyPing();
 
-    // 1. Fetch Active Auctions
-    document.getElementById('btn-fetch-active').addEventListener('click', async () => {
-      rawLog.textContent = 'Calling getActiveAuctions()...';
-      const auctions = await getActiveAuctions();
-      rawLog.textContent = JSON.stringify(auctions, null, 2);
+    // 2. Handle Actor Dropdown Changes
+    selectActor.addEventListener('change', (e) => {
+      const chosen = profilesCache.find(p => p.id === e.target.value) || null;
+      setActivePersona(chosen);
 
-      if (!auctions || auctions.length === 0) {
-        auctionsContainer.innerHTML = '<p class="placeholder-text">No active auctions found in public.auctions.</p>';
-        return;
+      if (chosen) {
+        actorBanner.style.display = 'flex';
+        actorDetails.innerHTML = `
+          <strong>${chosen.name}</strong> &lt;${chosen.email}&gt; <br>
+          <span style="color: #94a3b8;">Role: <strong>${chosen.role}</strong> | Country: <strong>${chosen.represented_country || 'None'}</strong> | UUID: ${chosen.id}</span>
+        `;
+      } else {
+        actorBanner.style.display = 'none';
       }
-
-      auctionsContainer.innerHTML = auctions.map(a => `
-        <div class="card">
-          <h3>${a.country_name}</h3>
-          <p><strong>Starting Price:</strong> $${a.starting_price}</p>
-          <p><strong>Top Bid:</strong> $${a.current_highest_bid ?? 0}</p>
-          <p><strong>Status:</strong> <span class="badge-status-active">${a.status}</span></p>
-          <small class="meta-id">${a.id}</small>
-          <button class="btn-copy-id" data-copy="${a.id}">Use ID</button>
-        </div>
-      `).join('');
-
-      document.querySelectorAll('.btn-copy-id').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          inputAuctionId.value = e.target.getAttribute('data-copy');
-        });
-      });
     });
 
-    // 2. Fetch Single Auction Details
-    document.getElementById('btn-fetch-single').addEventListener('click', async () => {
-      const id = inputAuctionId.value.trim();
-      if (!id) {
-        alert('Please enter or select an Auction UUID.');
+    btnRefreshActors.addEventListener('click', () => refreshActors(selectActor.value));
+
+    // 3. Handle Dummy User Creation
+    btnSubmitDummy.addEventListener('click', async () => {
+      const name = dummyName.value.trim();
+      const email = dummyEmail.value.trim();
+      const role = dummyRole.value;
+      const country = dummyCountry.value.trim();
+
+      if (!name || !email || !role || !country) {
+        dummyLog.className = 'log-box error';
+        dummyLog.textContent = 'Validation error: Name, Email, Role, and Country are all required.';
         return;
       }
 
-      rawLog.textContent = `Calling getAuctionById('${id}')...`;
-      const auction = await getAuctionById(id);
-      rawLog.textContent = JSON.stringify(auction, null, 2);
+      dummyLog.className = 'log-box';
+      dummyLog.textContent = 'Calling create_dummy_user RPC...';
 
-      if (!auction) {
-        singleAuctionView.innerHTML = '<p class="placeholder-text">Auction not found (returned null).</p>';
-        return;
+      const created = await createDummyUser({ name, email, role, country });
+
+      if (created) {
+        dummyLog.className = 'log-box success';
+        dummyLog.textContent = `Success!\nCreated Profile: ${created.name} (${created.id})\nRole: ${created.role} | Country: ${created.represented_country}`;
+        
+        dummyName.value = '';
+        dummyEmail.value = '';
+        dummyCountry.value = '';
+
+        await refreshActors(created.id);
+      } else {
+        dummyLog.className = 'log-box error';
+        dummyLog.textContent = 'RPC Execution Failed. Inspect browser console for details.';
       }
-
-      singleAuctionView.innerHTML = `
-        <div class="detail-card">
-          <h3>${auction.country_name}</h3>
-          <p><strong>Status:</strong> ${auction.status} | <strong>Payment:</strong> ${auction.payment_status}</p>
-          <p><strong>Starting:</strong> $${auction.starting_price} | <strong>Highest:</strong> $${auction.current_highest_bid ?? 0}</p>
-          <p><strong>Highest Bidder ID:</strong> ${auction.highest_bidder_id ?? 'None'}</p>
-          <p><strong>Created By:</strong> ${auction.created_by}</p>
-          <p><strong>Created At:</strong> ${new Date(auction.created_at).toLocaleString()}</p>
-        </div>
-      `;
     });
 
-    // 3. Fetch Bids for Auction
-    document.getElementById('btn-fetch-bids').addEventListener('click', async () => {
-      const id = inputAuctionId.value.trim();
-      if (!id) {
-        alert('Please enter or select an Auction UUID.');
+    // 4. Handle Real Supabase Sign-Up
+    btnSubmitReal.addEventListener('click', async () => {
+      const name = realName.value.trim();
+      const email = realEmail.value.trim();
+      const password = realPass.value;
+
+      if (!name || !email || !password) {
+        realLog.className = 'log-box error';
+        realLog.textContent = 'Validation error: Name, Email, and Password are all required.';
         return;
       }
 
-      rawLog.textContent = `Calling getAuctionBids('${id}')...`;
-      const bids = await getAuctionBids(id);
-      rawLog.textContent = JSON.stringify(bids, null, 2);
+      realLog.className = 'log-box';
+      realLog.textContent = 'Sending registration to Supabase Auth...';
 
-      if (!bids || bids.length === 0) {
-        bidsContainer.innerHTML = '<p class="placeholder-text">No bids placed on this auction yet.</p>';
-        return;
+      const res = await signUp(name, email, password);
+
+      if (res.success) {
+        realLog.className = 'log-box success';
+        realLog.textContent = `Success! Auth registered with ID: ${res.user.id}.\nTrigger should have mirrored this to public.profiles.`;
+        
+        realName.value = '';
+        realEmail.value = '';
+        realPass.value = '';
+
+        await refreshActors(res.user.id);
+      } else {
+        realLog.className = 'log-box error';
+        realLog.textContent = `Sign-Up failed: ${res.error}`;
       }
-
-      bidsContainer.innerHTML = `
-        <table class="bids-table">
-          <thead>
-            <tr>
-              <th>Amount</th>
-              <th>Bidder ID</th>
-              <th>Placed At</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${bids.map(b => `
-              <tr>
-                <td class="bid-val">$${b.amount}</td>
-                <td><small>${b.bidder_id}</small></td>
-                <td>${new Date(b.created_at).toLocaleTimeString()}</td>
-              </tr>
-            `).join('')}
-          </tbody>
-        </table>
-      `;
     });
 
-    // 4. Fetch Archived Auctions
-    document.getElementById('btn-fetch-archive').addEventListener('click', async () => {
-      rawLog.textContent = 'Calling getArchivedAuctions()...';
-      const archived = await getArchivedAuctions();
-      rawLog.textContent = JSON.stringify(archived, null, 2);
-
-      if (!archived || archived.length === 0) {
-        archiveContainer.innerHTML = '<p class="placeholder-text">No archived auctions found in public.auctions_archive.</p>';
-        return;
-      }
-
-      archiveContainer.innerHTML = archived.map(item => `
-        <div class="card archived">
-          <h3>${item.country_name}</h3>
-          <p><strong>Starting Price:</strong> $${item.starting_price}</p>
-          <p><strong>Final Price:</strong> $${item.final_price}</p>
-          <p><strong>Total Bids:</strong> ${item.total_bids}</p>
-          <p><strong>Status:</strong> <span class="badge-status-ended">${item.final_status}</span> (${item.payment_status})</p>
-          <p><strong>Archived At:</strong> ${new Date(item.archived_at).toLocaleString()}</p>
-          <small class="meta-id">Orig ID: ${item.auction_id}</small>
-        </div>
-      `).join('');
-    });
+    // Initial load
+    refreshActors();
   </script>
 </body>
 </html>

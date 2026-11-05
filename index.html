@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Auction System Test Bench</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+
+  <h1>Auction System Test Bench</h1>
+  <div id="conn-status" class="status-badge">Checking connection...</div>
+
+  <!-- Section 1: Active Auctions -->
+  <section class="test-panel">
+    <h2>1. Active Auctions</h2>
+    <div class="controls">
+      <button id="btn-fetch-active">Fetch Active Auctions</button>
+    </div>
+    <div id="auctions-container" class="grid">
+      <p class="placeholder-text">Click "Fetch Active Auctions" to load active cards.</p>
+    </div>
+  </section>
+
+  <!-- Section 2: Lookup by UUID & Bid History -->
+  <section class="test-panel">
+    <h2>2. Lookup Auction by ID & Bids</h2>
+    <div class="input-group">
+      <input 
+        type="text" 
+        id="input-auction-id" 
+        placeholder="Paste an Auction UUID here..." 
+      />
+      <button id="btn-fetch-single">Inspect Details</button>
+      <button id="btn-fetch-bids" class="btn-secondary">Load Bids</button>
+    </div>
+    <div id="single-auction-view"></div>
+    <div id="bids-container"></div>
+  </section>
+
+  <!-- Section 3: Archived Auctions -->
+  <section class="test-panel">
+    <h2>3. Archived Auctions (Historical Store)</h2>
+    <div class="controls">
+      <button id="btn-fetch-archive">Fetch Archived Auctions</button>
+    </div>
+    <div id="archive-container" class="grid">
+      <p class="placeholder-text">Click "Fetch Archived Auctions" to load archived records.</p>
+    </div>
+  </section>
+
+  <!-- Section 4: Console Output -->
+  <section class="test-panel">
+    <h2>Console Output (JSON / Errors)</h2>
+    <pre id="raw-log">// API responses and error traces will print here...</pre>
+  </section>
+
+  <script type="module">
+    import { supabase } from './database.js';
+    import { getActiveAuctions, getAuctionById, getAuctionBids } from './read_auction.js';
+    import { getArchivedAuctions } from './archive.js';
+
+    const statusBadge = document.getElementById('conn-status');
+    const rawLog = document.getElementById('raw-log');
+    const auctionsContainer = document.getElementById('auctions-container');
+    const singleAuctionView = document.getElementById('single-auction-view');
+    const bidsContainer = document.getElementById('bids-container');
+    const archiveContainer = document.getElementById('archive-container');
+    const inputAuctionId = document.getElementById('input-auction-id');
+
+    // 0. Verify Supabase connection
+    async function verifyPing() {
+      const { count, error } = await supabase
+        .from('auctions')
+        .select('*', { count: 'exact', head: true });
+
+      if (error) {
+        statusBadge.textContent = `Connection Error: ${error.message}`;
+        statusBadge.className = 'status-badge offline';
+      } else {
+        statusBadge.textContent = `Supabase Connected (Live rows: ${count ?? 0})`;
+        statusBadge.className = 'status-badge online';
+      }
+    }
+    verifyPing();
+
+    // 1. Fetch Active Auctions
+    document.getElementById('btn-fetch-active').addEventListener('click', async () => {
+      rawLog.textContent = 'Calling getActiveAuctions()...';
+      const auctions = await getActiveAuctions();
+      rawLog.textContent = JSON.stringify(auctions, null, 2);
+
+      if (!auctions || auctions.length === 0) {
+        auctionsContainer.innerHTML = '<p class="placeholder-text">No active auctions found in public.auctions.</p>';
+        return;
+      }
+
+      auctionsContainer.innerHTML = auctions.map(a => `
+        <div class="card">
+          <h3>${a.country_name}</h3>
+          <p><strong>Starting Price:</strong> $${a.starting_price}</p>
+          <p><strong>Top Bid:</strong> $${a.current_highest_bid ?? 0}</p>
+          <p><strong>Status:</strong> <span class="badge-status-active">${a.status}</span></p>
+          <small class="meta-id">${a.id}</small>
+          <button class="btn-copy-id" data-copy="${a.id}">Use ID</button>
+        </div>
+      `).join('');
+
+      document.querySelectorAll('.btn-copy-id').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          inputAuctionId.value = e.target.getAttribute('data-copy');
+        });
+      });
+    });
+
+    // 2. Fetch Single Auction Details
+    document.getElementById('btn-fetch-single').addEventListener('click', async () => {
+      const id = inputAuctionId.value.trim();
+      if (!id) {
+        alert('Please enter or select an Auction UUID.');
+        return;
+      }
+
+      rawLog.textContent = `Calling getAuctionById('${id}')...`;
+      const auction = await getAuctionById(id);
+      rawLog.textContent = JSON.stringify(auction, null, 2);
+
+      if (!auction) {
+        singleAuctionView.innerHTML = '<p class="placeholder-text">Auction not found (returned null).</p>';
+        return;
+      }
+
+      singleAuctionView.innerHTML = `
+        <div class="detail-card">
+          <h3>${auction.country_name}</h3>
+          <p><strong>Status:</strong> ${auction.status} | <strong>Payment:</strong> ${auction.payment_status}</p>
+          <p><strong>Starting:</strong> $${auction.starting_price} | <strong>Highest:</strong> $${auction.current_highest_bid ?? 0}</p>
+          <p><strong>Highest Bidder ID:</strong> ${auction.highest_bidder_id ?? 'None'}</p>
+          <p><strong>Created By:</strong> ${auction.created_by}</p>
+          <p><strong>Created At:</strong> ${new Date(auction.created_at).toLocaleString()}</p>
+        </div>
+      `;
+    });
+
+    // 3. Fetch Bids for Auction
+    document.getElementById('btn-fetch-bids').addEventListener('click', async () => {
+      const id = inputAuctionId.value.trim();
+      if (!id) {
+        alert('Please enter or select an Auction UUID.');
+        return;
+      }
+
+      rawLog.textContent = `Calling getAuctionBids('${id}')...`;
+      const bids = await getAuctionBids(id);
+      rawLog.textContent = JSON.stringify(bids, null, 2);
+
+      if (!bids || bids.length === 0) {
+        bidsContainer.innerHTML = '<p class="placeholder-text">No bids placed on this auction yet.</p>';
+        return;
+      }
+
+      bidsContainer.innerHTML = `
+        <table class="bids-table">
+          <thead>
+            <tr>
+              <th>Amount</th>
+              <th>Bidder ID</th>
+              <th>Placed At</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${bids.map(b => `
+              <tr>
+                <td class="bid-val">$${b.amount}</td>
+                <td><small>${b.bidder_id}</small></td>
+                <td>${new Date(b.created_at).toLocaleTimeString()}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    });
+
+    // 4. Fetch Archived Auctions
+    document.getElementById('btn-fetch-archive').addEventListener('click', async () => {
+      rawLog.textContent = 'Calling getArchivedAuctions()...';
+      const archived = await getArchivedAuctions();
+      rawLog.textContent = JSON.stringify(archived, null, 2);
+
+      if (!archived || archived.length === 0) {
+        archiveContainer.innerHTML = '<p class="placeholder-text">No archived auctions found in public.auctions_archive.</p>';
+        return;
+      }
+
+      archiveContainer.innerHTML = archived.map(item => `
+        <div class="card archived">
+          <h3>${item.country_name}</h3>
+          <p><strong>Starting Price:</strong> $${item.starting_price}</p>
+          <p><strong>Final Price:</strong> $${item.final_price}</p>
+          <p><strong>Total Bids:</strong> ${item.total_bids}</p>
+          <p><strong>Status:</strong> <span class="badge-status-ended">${item.final_status}</span> (${item.payment_status})</p>
+          <p><strong>Archived At:</strong> ${new Date(item.archived_at).toLocaleString()}</p>
+          <small class="meta-id">Orig ID: ${item.auction_id}</small>
+        </div>
+      `).join('');
+    });
+  </script>
+</body>
+</html>

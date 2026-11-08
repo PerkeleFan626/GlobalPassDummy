@@ -116,6 +116,7 @@ input:focus, select:focus {
   display: flex;
   gap: 10px;
   align-items: center;
+  margin-top: 4px;
 }
 
 button {
@@ -188,4 +189,37 @@ button.btn-secondary:hover {
 .log-box.success {
   color: var(--success);
   border-color: rgba(16, 185, 129, 0.3);
+}
+
+.auction-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.auction-item {
+  background: #030712;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.auction-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.auction-item-price {
+  color: #10b981;
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.auction-item-meta {
+  font-size: 0.78rem;
+  color: var(--text-muted);
 }

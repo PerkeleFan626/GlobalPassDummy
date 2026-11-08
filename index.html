@@ -3,25 +3,25 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Auction System Test Bench - User & Mock Auth</title>
+  <title>Auction System Test Bench</title>
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
 
   <div class="container">
     <header>
-      <h1>Auction System — Step 2 Test Bench</h1>
-      <p>Manage authenticated users, dummy test personas, and active actor contexts.</p>
+      <h1>Auction System — Test Bench</h1>
+      <p>Test dummy persona generation, session contexts, and auction listings.</p>
     </header>
 
-    <!-- Section 0: Active Actor Context -->
+    <!-- Context Switcher -->
     <section class="card">
-      <h2>Active Actor Context <span class="badge">Session State</span></h2>
+      <h2>Active User Context <span class="badge">Session State</span></h2>
       <div class="actions">
         <select id="select-actor" style="flex: 1;">
           <option value="">-- Select Active Persona / Actor --</option>
         </select>
-        <button id="btn-refresh-actors" class="btn-secondary">Reload Profiles</button>
+        <button id="btn-refresh-actors" class="btn-secondary" type="button">Reload Profiles</button>
       </div>
 
       <div id="actor-banner" class="active-actor-banner" style="display: none;">
@@ -30,27 +30,27 @@
       </div>
     </section>
 
-    <!-- Section 1: Create Dummy User (RPC) -->
+    <!-- Step 1: Create Dummy User -->
     <section class="card">
-      <h2>1. Create Dummy User <span class="badge">Testing Helper</span></h2>
+      <h2>1. Create Dummy User <span class="badge">RPC Helper</span></h2>
       <p style="font-size: 0.85rem; color: var(--text-muted);">
-        Calls <code>create_dummy_user</code> RPC to seed a full test profile without email verification.
+        Executes <code>create_dummy_user</code> to seed <code>auth.users</code> and <code>public.profiles</code>.
       </p>
 
       <form id="form-dummy-user" class="form-grid">
         <div class="form-group">
           <label for="dummy-name">Name</label>
-          <input type="text" id="dummy-name" placeholder="Alice Lindqvist" required />
+          <input type="text" id="dummy-name" placeholder="Astrid Lind" required />
         </div>
         <div class="form-group">
           <label for="dummy-email">Email</label>
-          <input type="email" id="dummy-email" placeholder="alice@testbench.local" required />
+          <input type="email" id="dummy-email" placeholder="astrid@testbench.local" required />
         </div>
         <div class="form-group">
           <label for="dummy-role">Role</label>
           <select id="dummy-role" required>
-            <option value="bidder">bidder</option>
             <option value="seller">seller</option>
+            <option value="bidder">bidder</option>
           </select>
         </div>
         <div class="form-group">
@@ -63,54 +63,69 @@
         <button id="btn-submit-dummy" type="button">+ Create Dummy User</button>
       </div>
 
-      <div id="dummy-log" class="log-box">Awaiting input...</div>
+      <div id="dummy-log" class="log-box">Awaiting dummy user input...</div>
     </section>
 
-    <!-- Section 2: Real Supabase Sign-Up -->
+    <!-- Step 2: Create Auction -->
     <section class="card">
-      <h2>2. Real Auth Sign-Up <span class="badge">Production Trigger</span></h2>
+      <h2>2. Create Auction Listing <span class="badge">public.auctions</span></h2>
       <p style="font-size: 0.85rem; color: var(--text-muted);">
-        Calls standard <code>signUp()</code> to verify the PostgreSQL <code>handle_new_user</code> trigger.
+        Inserts an auction row attributed to the currently selected persona above.
       </p>
 
-      <div class="form-grid">
+      <form id="form-create-auction" class="form-grid">
         <div class="form-group">
-          <label for="real-name">Full Name</label>
-          <input type="text" id="real-name" placeholder="Ayush Sharma" />
+          <label for="auction-price">Starting Price ($)</label>
+          <input type="number" id="auction-price" placeholder="100" min="0" required />
         </div>
         <div class="form-group">
-          <label for="real-email">Email</label>
-          <input type="email" id="real-email" placeholder="ayush@example.com" />
+          <label for="auction-end-time">End Date & Time</label>
+          <input type="datetime-local" id="auction-end-time" required />
         </div>
-        <div class="form-group">
-          <label for="real-pass">Password</label>
-          <input type="password" id="real-pass" placeholder="Min 6 characters" />
+        <div class="form-group" style="grid-column: 1 / -1;">
+          <label for="auction-desc">Description</label>
+          <input type="text" id="auction-desc" placeholder="Details about this auction lot..." required />
         </div>
-      </div>
+      </form>
 
       <div class="actions">
-        <button id="btn-submit-real" class="btn-secondary" type="button">Register User</button>
+        <button id="btn-submit-auction" type="button">Publish Auction</button>
       </div>
 
-      <div id="real-log" class="log-box">Awaiting input...</div>
+      <div id="auction-log" class="log-box">Awaiting auction input...</div>
+    </section>
+
+    <!-- Step 3: Live Auctions View -->
+    <section class="card">
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h2>Active Listings <span class="badge">Live View</span></h2>
+        <button id="btn-refresh-auctions" class="btn-secondary" type="button">Refresh Listings</button>
+      </div>
+
+      <div id="auctions-container" class="auction-feed">
+        <p style="color: var(--text-muted); font-size: 0.85rem;">Loading active listings...</p>
+      </div>
     </section>
   </div>
 
   <script type="module">
-    import { signUp } from './auth.js';
     import { 
       createDummyUser, 
       getTestProfiles, 
-      setActivePersona 
-    } from './mockUsers.js';
+      setActiveDummyUser 
+    } from './users.js';
+    import { 
+      createAuction, 
+      getActiveAuctions 
+    } from './auctions.js';
 
-    // UI Elements - Actor Selection
+    // Elements - User Selector
     const selectActor = document.getElementById('select-actor');
     const btnRefreshActors = document.getElementById('btn-refresh-actors');
     const actorBanner = document.getElementById('actor-banner');
     const actorDetails = document.getElementById('actor-details');
 
-    // UI Elements - Dummy User Form
+    // Elements - Dummy Form
     const dummyName = document.getElementById('dummy-name');
     const dummyEmail = document.getElementById('dummy-email');
     const dummyRole = document.getElementById('dummy-role');
@@ -118,16 +133,25 @@
     const btnSubmitDummy = document.getElementById('btn-submit-dummy');
     const dummyLog = document.getElementById('dummy-log');
 
-    // UI Elements - Real Auth Form
-    const realName = document.getElementById('real-name');
-    const realEmail = document.getElementById('real-email');
-    const realPass = document.getElementById('real-pass');
-    const btnSubmitReal = document.getElementById('btn-submit-real');
-    const realLog = document.getElementById('real-log');
+    // Elements - Auction Form
+    const auctionPrice = document.getElementById('auction-price');
+    const auctionEndTime = document.getElementById('auction-end-time');
+    const auctionDesc = document.getElementById('auction-desc');
+    const btnSubmitAuction = document.getElementById('btn-submit-auction');
+    const auctionLog = document.getElementById('auction-log');
+
+    // Elements - Auction Feed
+    const btnRefreshAuctions = document.getElementById('btn-refresh-auctions');
+    const auctionsContainer = document.getElementById('auctions-container');
 
     let profilesCache = [];
 
-    // 1. Populate Actor Dropdown
+    // Set default end time input to +24 hours
+    const defaultEnd = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    defaultEnd.setMinutes(defaultEnd.getMinutes() - defaultEnd.getTimezoneOffset());
+    auctionEndTime.value = defaultEnd.toISOString().slice(0, 16);
+
+    // 1. Populate Actor Selector
     async function refreshActors(selectedId = null) {
       profilesCache = await getTestProfiles();
       selectActor.innerHTML = '<option value="">-- Select Active Persona / Actor --</option>';
@@ -145,15 +169,15 @@
       }
     }
 
-    // 2. Handle Actor Dropdown Changes
+    // 2. Persona Selection Listener
     selectActor.addEventListener('change', (e) => {
       const chosen = profilesCache.find(p => p.id === e.target.value) || null;
-      setActivePersona(chosen);
+      setActiveDummyUser(chosen);
 
       if (chosen) {
         actorBanner.style.display = 'flex';
         actorDetails.innerHTML = `
-          <strong>${chosen.name}</strong> &lt;${chosen.email}&gt; <br>
+          <strong>${chosen.name}</strong> &lt;${chosen.email}&gt;<br>
           <span style="color: #94a3b8;">Role: <strong>${chosen.role}</strong> | Country: <strong>${chosen.represented_country || 'None'}</strong> | UUID: ${chosen.id}</span>
         `;
       } else {
@@ -163,7 +187,7 @@
 
     btnRefreshActors.addEventListener('click', () => refreshActors(selectActor.value));
 
-    // 3. Handle Dummy User Creation
+    // 3. Create Dummy User Listener
     btnSubmitDummy.addEventListener('click', async () => {
       const name = dummyName.value.trim();
       const email = dummyEmail.value.trim();
@@ -172,7 +196,7 @@
 
       if (!name || !email || !role || !country) {
         dummyLog.className = 'log-box error';
-        dummyLog.textContent = 'Validation error: Name, Email, Role, and Country are all required.';
+        dummyLog.textContent = 'Validation error: Name, Email, Role, and Country are required.';
         return;
       }
 
@@ -184,7 +208,7 @@
       if (created) {
         dummyLog.className = 'log-box success';
         dummyLog.textContent = `Success!\nCreated Profile: ${created.name} (${created.id})\nRole: ${created.role} | Country: ${created.represented_country}`;
-        
+
         dummyName.value = '';
         dummyEmail.value = '';
         dummyCountry.value = '';
@@ -196,40 +220,74 @@
       }
     });
 
-    // 4. Handle Real Supabase Sign-Up
-    btnSubmitReal.addEventListener('click', async () => {
-      const name = realName.value.trim();
-      const email = realEmail.value.trim();
-      const password = realPass.value;
+    // 4. Render Active Auctions
+    async function renderAuctionsList() {
+      const listings = await getActiveAuctions();
+      auctionsContainer.innerHTML = '';
 
-      if (!name || !email || !password) {
-        realLog.className = 'log-box error';
-        realLog.textContent = 'Validation error: Name, Email, and Password are all required.';
+      if (listings.length === 0) {
+        auctionsContainer.innerHTML = '<p style="color: var(--text-muted); font-size: 0.85rem;">No active auctions found.</p>';
         return;
       }
 
-      realLog.className = 'log-box';
-      realLog.textContent = 'Sending registration to Supabase Auth...';
+      listings.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'auction-item';
+        div.innerHTML = `
+          <div class="auction-item-header">
+            <strong>${item.description || 'No description provided'}</strong>
+            <span class="auction-item-price">$${item.current_bid}</span>
+          </div>
+          <div class="auction-item-meta">
+            Seller: <strong>${item.seller?.name || 'Unknown'}</strong> (${item.seller?.represented_country || 'Global'}) &bull;
+            Closes: ${new Date(item.end_time).toLocaleString()} &bull;
+            ID: <code>${item.id.slice(0, 8)}...</code>
+          </div>
+        `;
+        auctionsContainer.appendChild(div);
+      });
+    }
 
-      const res = await signUp(name, email, password);
+    btnRefreshAuctions.addEventListener('click', renderAuctionsList);
+
+    // 5. Create Auction Listener
+    btnSubmitAuction.addEventListener('click', async () => {
+      const starting_price = parseFloat(auctionPrice.value);
+      const end_time = auctionEndTime.value;
+      const description = auctionDesc.value.trim();
+
+      if (isNaN(starting_price) || !end_time || !description) {
+        auctionLog.className = 'log-box error';
+        auctionLog.textContent = 'Validation error: Starting price, End date/time, and Description are required.';
+        return;
+      }
+
+      auctionLog.className = 'log-box';
+      auctionLog.textContent = 'Creating auction in Supabase...';
+
+      const res = await createAuction({
+        description,
+        starting_price,
+        end_time
+      });
 
       if (res.success) {
-        realLog.className = 'log-box success';
-        realLog.textContent = `Success! Auth registered with ID: ${res.user.id}.\nTrigger should have mirrored this to public.profiles.`;
-        
-        realName.value = '';
-        realEmail.value = '';
-        realPass.value = '';
+        auctionLog.className = 'log-box success';
+        auctionLog.textContent = `Auction Published Successfully!\nID: ${res.auction.id}\nSeller: ${res.auction.seller?.name} (${res.auction.seller_id})\nCurrent Bid: $${res.auction.current_bid}`;
 
-        await refreshActors(res.user.id);
+        auctionPrice.value = '';
+        auctionDesc.value = '';
+
+        await renderAuctionsList();
       } else {
-        realLog.className = 'log-box error';
-        realLog.textContent = `Sign-Up failed: ${res.error}`;
+        auctionLog.className = 'log-box error';
+        auctionLog.textContent = `Auction Creation Failed: ${res.error}`;
       }
     });
 
     // Initial load
     refreshActors();
+    renderAuctionsList();
   </script>
 </body>
 </html>

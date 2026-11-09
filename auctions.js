@@ -1,7 +1,7 @@
 import { supabase } from './database.js';
 import { getCurrentUser, getTestProfiles } from './users.js';
 
-export async function createAuction({description = '', starting_price, end_time}) {
+export async function createAuction({country_name, starting_price, end_time}) {
     const user = await getCurrentUser();
 
     if (!user || !user.id) {
@@ -9,6 +9,13 @@ export async function createAuction({description = '', starting_price, end_time}
         console.error(errorMsg);
         return{success: false, error: errorMsg};
     
+    }
+
+    const representedCountry = (country_name || user.represented_country || '').trim();
+    if (!representedCountry) {
+        const errorMsg = 'country_name is missing. Please enter a country or select a profile with a represented_country';
+        console.error(errorMsg);
+        return {success: false, error: errorMsg};
     }
 
     const price = Number(starting_price);
@@ -26,19 +33,18 @@ export async function createAuction({description = '', starting_price, end_time}
 
     const formattedEndTime = new Date(end_time).toISOString();
 
-    const{data, error} = await supabase
+    const { data, error } = await supabase
     .from('auctions')
     .insert([
       {
-        seller_id: user.id,
-        description: description.trim(),
+        country_name: representedCountry,
+        created_by: user.id,
         starting_price: price,
-        current_bid: price,
         status: 'active',
         end_time: formattedEndTime
       }
     ])
-    .select(`*, seller:profiles(name, email, represented_country)`)
+    .select(`*,government:profiles!created_by(name, email, represented_country)`)
     .single();
 
     if(error) {
@@ -51,11 +57,8 @@ export async function createAuction({description = '', starting_price, end_time}
 
 export async function getActiveAuctions() {
     const {data, error} = await supabase
-.from('auctions')
-    .select(`
-      *,
-      seller:profiles!created_by(name, email, represented_country)
-    `)
+    .from('auctions')
+    .select(`*, government:profiles!created_by(name, email, represented_country)`)
     .eq('status', 'active')
     .order('created_at', { ascending: false });
 

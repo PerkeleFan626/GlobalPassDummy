@@ -49,8 +49,9 @@
         <div class="form-group">
           <label for="dummy-role">Role</label>
           <select id="dummy-role" required>
-            <option value="seller">seller</option>
+            <option value="government">government</option>
             <option value="bidder">bidder</option>
+            <option value="admin">admin</option>
           </select>
         </div>
         <div class="form-group">
@@ -70,10 +71,14 @@
     <section class="card">
       <h2>2. Create Auction Listing <span class="badge">public.auctions</span></h2>
       <p style="font-size: 0.85rem; color: var(--text-muted);">
-        Inserts an auction row attributed to the currently selected persona above.
+        Publishes an auction for the active persona. <strong>Country Name</strong> automatically defaults to their represented country.
       </p>
 
       <form id="form-create-auction" class="form-grid">
+        <div class="form-group">
+          <label for="auction-country">Country Name</label>
+          <input type="text" id="auction-country" placeholder="Select an actor above" required />
+        </div>
         <div class="form-group">
           <label for="auction-price">Starting Price ($)</label>
           <input type="number" id="auction-price" placeholder="100" min="0" required />
@@ -81,10 +86,6 @@
         <div class="form-group">
           <label for="auction-end-time">End Date & Time</label>
           <input type="datetime-local" id="auction-end-time" required />
-        </div>
-        <div class="form-group" style="grid-column: 1 / -1;">
-          <label for="auction-desc">Description</label>
-          <input type="text" id="auction-desc" placeholder="Details about this auction lot..." required />
         </div>
       </form>
 
@@ -119,13 +120,13 @@
       getActiveAuctions 
     } from './auctions.js';
 
-    // Elements - User Selector
+    // User Context Elements
     const selectActor = document.getElementById('select-actor');
     const btnRefreshActors = document.getElementById('btn-refresh-actors');
     const actorBanner = document.getElementById('actor-banner');
     const actorDetails = document.getElementById('actor-details');
 
-    // Elements - Dummy Form
+    // Dummy User Form Elements
     const dummyName = document.getElementById('dummy-name');
     const dummyEmail = document.getElementById('dummy-email');
     const dummyRole = document.getElementById('dummy-role');
@@ -133,20 +134,20 @@
     const btnSubmitDummy = document.getElementById('btn-submit-dummy');
     const dummyLog = document.getElementById('dummy-log');
 
-    // Elements - Auction Form
+    // Auction Form Elements
+    const auctionCountry = document.getElementById('auction-country');
     const auctionPrice = document.getElementById('auction-price');
     const auctionEndTime = document.getElementById('auction-end-time');
-    const auctionDesc = document.getElementById('auction-desc');
     const btnSubmitAuction = document.getElementById('btn-submit-auction');
     const auctionLog = document.getElementById('auction-log');
 
-    // Elements - Auction Feed
+    // Feed Elements
     const btnRefreshAuctions = document.getElementById('btn-refresh-auctions');
     const auctionsContainer = document.getElementById('auctions-container');
 
     let profilesCache = [];
 
-    // Set default end time input to +24 hours
+    // Set default end time to +24 hours
     const defaultEnd = new Date(Date.now() + 24 * 60 * 60 * 1000);
     defaultEnd.setMinutes(defaultEnd.getMinutes() - defaultEnd.getTimezoneOffset());
     auctionEndTime.value = defaultEnd.toISOString().slice(0, 16);
@@ -169,7 +170,7 @@
       }
     }
 
-    // 2. Persona Selection Listener
+    // 2. Persona Selection Listener (auto-populates country)
     selectActor.addEventListener('change', (e) => {
       const chosen = profilesCache.find(p => p.id === e.target.value) || null;
       setActiveDummyUser(chosen);
@@ -180,8 +181,12 @@
           <strong>${chosen.name}</strong> &lt;${chosen.email}&gt;<br>
           <span style="color: #94a3b8;">Role: <strong>${chosen.role}</strong> | Country: <strong>${chosen.represented_country || 'None'}</strong> | UUID: ${chosen.id}</span>
         `;
+        if (chosen.represented_country) {
+          auctionCountry.value = chosen.represented_country;
+        }
       } else {
         actorBanner.style.display = 'none';
+        auctionCountry.value = '';
       }
     });
 
@@ -216,7 +221,7 @@
         await refreshActors(created.id);
       } else {
         dummyLog.className = 'log-box error';
-        dummyLog.textContent = 'RPC Execution Failed. Inspect browser console for details.';
+        dummyLog.textContent = 'RPC Execution Failed. Check browser console.';
       }
     });
 
@@ -235,12 +240,13 @@
         div.className = 'auction-item';
         div.innerHTML = `
           <div class="auction-item-header">
-            <strong>${item.description || 'No description provided'}</strong>
-            <span class="auction-item-price">$${item.current_bid}</span>
+            <strong>${item.country_name} Lot</strong>
+            <span class="auction-item-price">$${item.current_highest_bid || item.starting_price}</span>
           </div>
           <div class="auction-item-meta">
-            Seller: <strong>${item.seller?.name || 'Unknown'}</strong> (${item.seller?.represented_country || 'Global'}) &bull;
+            Government: <strong>${item.government?.name || 'Unknown'}</strong> (${item.government?.represented_country || item.country_name}) &bull;
             Closes: ${new Date(item.end_time).toLocaleString()} &bull;
+            Payment: <strong>${item.payment_status}</strong> &bull;
             ID: <code>${item.id.slice(0, 8)}...</code>
           </div>
         `;
@@ -254,11 +260,11 @@
     btnSubmitAuction.addEventListener('click', async () => {
       const starting_price = parseFloat(auctionPrice.value);
       const end_time = auctionEndTime.value;
-      const description = auctionDesc.value.trim();
+      const country_name = auctionCountry.value.trim();
 
-      if (isNaN(starting_price) || !end_time || !description) {
+      if (isNaN(starting_price) || !end_time || !country_name) {
         auctionLog.className = 'log-box error';
-        auctionLog.textContent = 'Validation error: Starting price, End date/time, and Description are required.';
+        auctionLog.textContent = 'Validation error: Starting price, End date/time, and Country Name are required.';
         return;
       }
 
@@ -266,17 +272,16 @@
       auctionLog.textContent = 'Creating auction in Supabase...';
 
       const res = await createAuction({
-        description,
+        country_name,
         starting_price,
         end_time
       });
 
       if (res.success) {
         auctionLog.className = 'log-box success';
-        auctionLog.textContent = `Auction Published Successfully!\nID: ${res.auction.id}\nSeller: ${res.auction.seller?.name} (${res.auction.seller_id})\nCurrent Bid: $${res.auction.current_bid}`;
+        auctionLog.textContent = `Auction Published Successfully!\nID: ${res.auction.id}\nCountry: ${res.auction.country_name}\nGovernment: ${res.auction.government?.name} (${res.auction.created_by})\nCurrent Highest Bid: $${res.auction.current_highest_bid}`;
 
         auctionPrice.value = '';
-        auctionDesc.value = '';
 
         await renderAuctionsList();
       } else {
